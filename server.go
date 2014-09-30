@@ -50,12 +50,15 @@ func (l listener) Close() error {
 }
 
 func ListenAndServe(addr string, handler http.Handler) error {
+	return ListenAndServeGracefully(addr, handler, manners.NewServer())
+}
+
+func ListenAndServeGracefully(addr string, handler http.Handler, gs *manners.GracefulServer) error {
 	var gl *manners.GracefulListener
-	srv := manners.NewServer()
 
 	done := make(chan struct{})
 	serve := func(l net.Listener) {
-		srv.Serve(l, handler)
+		gs.Serve(l, handler)
 		close(done)
 	}
 
@@ -68,11 +71,11 @@ func ListenAndServe(addr string, handler http.Handler) error {
 			return err
 		}
 		log.Println("Listening on", l.Addr())
-		gl = manners.NewListener(newListener(l), srv)
+		gl = manners.NewListener(newListener(l), gs)
 		go serve(gl)
 	} else {
 		log.Println("Resuming listening on", l.Addr())
-		gl = manners.NewListener(newListener(l), srv)
+		gl = manners.NewListener(newListener(l), gs)
 		go serve(gl)
 
 		if err := goagain.Kill(); nil != err {
@@ -80,20 +83,19 @@ func ListenAndServe(addr string, handler http.Handler) error {
 		}
 	}
 
-	// Block the main goroutine awaiting signals.
+	log.Println("Awaiting signals on", l.Addr())
 	sig, err := goagain.Wait(l)
 	if err != nil {
 		return err
 	}
 
-	log.Println("Gracefully shutting down", l.Addr())
+	log.Println("Gracefully shutting down on", l.Addr())
 
 	log.Println("Stop accepting connections on", l.Addr())
 	gl.Close()
 
-	log.Println("Draining connections", l.Addr())
+	log.Println("Draining connections on", l.Addr())
 	<-done
-
 
 	if goagain.Strategy == goagain.Double && sig == goagain.SIGUSR2 {
 		// If we received SIGUSR2, re-exec the parent process.
@@ -102,7 +104,7 @@ func ListenAndServe(addr string, handler http.Handler) error {
 		}
 	}
 
-	log.Println("Shutting down", l.Addr())
+	log.Println("Shutting down on", l.Addr())
 	os.Exit(0)
 	return nil
 }
