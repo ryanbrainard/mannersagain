@@ -86,14 +86,14 @@ func ListenAndServe(addr string, handler http.Handler) error {
 		return err
 	}
 
-	// Wait returns one of SIGINT, SIGTERM, SIGQUIT, SIGUSR2
-	// We should stop gracefully if we receive one of the second two
-	if sig != goagain.SIGINT && sig != goagain.SIGTERM {
-		// Stop accepting new connections
-		gl.Close()
-		// Wait for all existing connections to complete
-		<-done
-	}
+	log.Println("Gracefully shutting down", l.Addr())
+
+	log.Println("Stop accepting connections on", l.Addr())
+	gl.Close()
+
+	log.Println("Draining connections", l.Addr())
+	<-done
+
 
 	if goagain.Strategy == goagain.Double && sig == goagain.SIGUSR2 {
 		// If we received SIGUSR2, re-exec the parent process.
@@ -102,7 +102,7 @@ func ListenAndServe(addr string, handler http.Handler) error {
 		}
 	}
 
-	// We were told to exit, so do it!
+	log.Println("Shutting down", l.Addr())
 	os.Exit(0)
 	return nil
 }
